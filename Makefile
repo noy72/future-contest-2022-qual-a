@@ -1,6 +1,7 @@
 .PHONY: co
 co:
 	g++ -std=c++1z main.cpp
+	rm -f tools/a.out
 	cp a.out tools/
 
 .PHONY: test
@@ -13,7 +14,7 @@ n:
 
 .PHONY: nout
 nout:
-	cat ./tools/out.txt
+	cat ./tools/out.txt | pbcopy
 
 .PHONY: test-all
 test-all:

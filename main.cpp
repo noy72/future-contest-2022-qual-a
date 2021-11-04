@@ -83,7 +83,7 @@ class Task {
 		bool assigned;
 		bool finished;
 
-		Task(int n, int r) : assigned(false), finished(false){
+		Task(int n, int r) : predecessors_count(0), assigned(false), finished(false){
 			level = vector<int>(n, 0);
 			successor_tasks = vector<int>();
 		}
@@ -116,7 +116,7 @@ int next_task(const vector<Task> &tasks) {
 	int task_idx = -1, successor_task_count = -1;
 	rep(i,tasks.size()){
 		auto task = tasks[i];
-		if(task.finished or task.assigned) continue;
+		if(task.predecessors_count > 0 or task.finished or task.assigned) continue;
 		int size = static_cast<int>(task.successor_tasks.size());
 		if(successor_task_count < size) {
 			successor_task_count = size;
@@ -153,9 +153,9 @@ void solve() {
 	while(true){
 		vector<pair<int, int>> assign_list;
 		while(true) {
-			break;
 			int task_idx = next_task(tasks);
 			int worker_idx = random_choice_worker(workers);
+			// cerr << task_idx << ' ' << worker_idx << endl;
 			if(task_idx == -1 or worker_idx == -1) break;
 
 			workers[worker_idx].assign_task(day, task_idx);
