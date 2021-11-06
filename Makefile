@@ -19,3 +19,11 @@ nout:
 .PHONY: test-all
 test-all:
 	python3 test_all.py
+
+.PHONY: test-one
+test-all:
+	python3 test_one.py $(n)
+
+.PHONY: note
+note:
+	jupyter lab
