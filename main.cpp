@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdio.h>
 
 #include <algorithm>
@@ -91,9 +92,9 @@ class PredictedSkill {
   PredictedSkill(int k) : skill(vector<int>(k, 0)) {}
 
   // 与えたタスクの予測完了日数を返す
-  int predict_days(vector<int>& task) {
+  int predict_days(const vector<int>& level) {
     int res = 0;
-    rep(i, task.size()) { res += max(0, task[i] - skill[i]); }
+    rep(i, level.size()) { res += max(0, level[i] - skill[i]); }
     return res == 0 ? 1 : res;
   }
 };
@@ -107,10 +108,11 @@ class Task {
   bool assigned;
   bool finished;
 
-  Task(int n, int r) : predecessors_count(0), assigned(false), finished(false) {
-    level = vector<int>(n, 0);
-    successor_tasks = vector<int>();
-  }
+  Task()
+      : successor_tasks(vector<int>()),
+        predecessors_count(0),
+        assigned(false),
+        finished(false) {}
 
   void assign() { assigned = true; }
 
@@ -285,6 +287,12 @@ class Worker {
       update_diffs();
       update_pred_days();
 
+      // show(_) vector<int> days_diff(task_size);
+      // rep(i, task_size) { days_diff[i] = pred_days[i] - actual_days[i]; }
+      // int sum = 0;
+      // rep(i, task_size) { sum += abs(days_diff[i]); }
+      // show(sum);
+
       if (match_count == task_size) {
         break;
       }
@@ -292,18 +300,30 @@ class Worker {
   }
 };
 
-int random_choice_worker(const vector<Worker>& workers) {
-  vector<int> free;
+int choice_worker(const vector<Worker>& workers, const vector<int>& level) {
+  vector<pair<int, int>> free;  // ワーカーの id, 予測完了日数
+  int min_predict_days = INT_MAX;
   rep(i, workers.size()) {
     auto worker = workers[i];
     if (worker.assignable()) {
-      free.emplace_back(i);
+      const int p_days = worker.pred_skill.predict_days(level);
+      free.emplace_back(make_pair(i, p_days));
+      min_predict_days = min(min_predict_days, p_days);
     }
   }
 
   if (free.size() == 0) return -1;
 
-  return free[randint(0, free.size() - 1)];
+  vector<int> free_worker_idx;
+  for (auto p : free) {
+    if (p.second == min_predict_days) {
+      free_worker_idx.emplace_back(p.first);
+    }
+  }
+
+  assert(free_worker_idx.size() > 0);
+
+  return free_worker_idx.at(randint(0, free_worker_idx.size() - 1));
 }
 
 int next_task(const vector<Task>& tasks) {
@@ -334,7 +354,7 @@ void solve() {
 
   vector<Worker> workers(m, Worker(k));
 
-  vector<Task> tasks(n, Task(n, r));
+  vector<Task> tasks(n, Task());
   rep(i, n) {
     vector<int> level(k);
     cin >> level;
@@ -356,9 +376,11 @@ void solve() {
     vector<pair<int, int>> assign_list;
     while (true) {
       int task_idx = next_task(tasks);
-      int worker_idx = random_choice_worker(workers);
+      if (task_idx == -1) break;
+
+      int worker_idx = choice_worker(workers, tasks[task_idx].level);
       // cerr << task_idx << ' ' << worker_idx << endl;
-      if (task_idx == -1 or worker_idx == -1) break;
+      if (worker_idx == -1) break;
 
       workers[worker_idx].assign_task(day, task_idx);
       tasks[task_idx].assign();
