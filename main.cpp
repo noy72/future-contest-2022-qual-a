@@ -89,6 +89,20 @@ int roulette(vector<int>& v) {
 
   throw runtime_error("ルーレット選択のパラメータが 0 のみを含む配列です");
 }
+int roulette(vector<double>& v) {
+  double total = accumulate(all(v), 0.0);
+  double threshold = randdouble(0, total - 1);
+
+  int sum = 0;
+  rep(i, v.size()) {
+    sum += v[i];
+    if (sum >= threshold - 1e8) {
+      return i;
+    }
+  }
+
+  throw runtime_error("ルーレット選択のパラメータが 0 のみを含む配列です");
+}
 
 // ランダムにスキルベクトルを生成する
 vector<int> generate_skill(int k) {
@@ -299,33 +313,39 @@ int choice_worker(const vector<Worker>& workers, const vector<int>& level) {
 
 int next_task(const vector<Task>& tasks) {
   int task_idx = -1, successor_task_count = -1, total_level = INT_MAX;
+  vector<int> task_idx_list;
+  vector<double> p;
   rep(i, tasks.size()) {
     auto task = tasks[i];
     if (task.predecessors_count > 0 or task.finished or task.assigned) continue;
 
     int size = static_cast<int>(task.successor_tasks.size());
 
-    if (successor_task_count < size) {
-      total_level = task.total_level;
-      successor_task_count = size;
-      task_idx = i;
-    } else if (total_level > task.total_level and
-               successor_task_count == size) {
-      successor_task_count = size;
-      task_idx = i;
-    }
-    // if (total_level > task.total_level) {
+    task_idx_list.emplace_back(i);
+    p.emplace_back(task.total_level / (size + 1));
+
+    // if (successor_task_count < size) {
     //   total_level = task.total_level;
     //   successor_task_count = size;
     //   task_idx = i;
-    // } else if (total_level == task.total_level and
-    //            successor_task_count < size) {
+    // } else if (total_level > task.total_level and
+    //            successor_task_count == size) {
     //   successor_task_count = size;
     //   task_idx = i;
     // }
+    //  if (total_level > task.total_level) {
+    //    total_level = task.total_level;
+    //    successor_task_count = size;
+    //    task_idx = i;
+    //  } else if (total_level == task.total_level and
+    //             successor_task_count < size) {
+    //    successor_task_count = size;
+    //    task_idx = i;
+    //  }
   }
 
-  return task_idx;
+  if (p.size() == 0) return -1;
+  return task_idx_list[roulette(p)];
 }
 
 void solve() {
