@@ -1,4 +1,4 @@
-from subprocess import Popen, PIPE, STDOUT
+from subprocess import Popen, PIPE, DEVNULL
 from multiprocessing import Pool
 import pathlib
 
@@ -12,9 +12,11 @@ def get_score(txt):
     with open(txt, 'br') as f:
         in_txt = f.read()
 
-    p = Popen(run_test, stdout=PIPE, stdin=PIPE, stderr=PIPE, cwd='tools')
+    p = Popen(run_test, stdout=DEVNULL, stdin=PIPE, stderr=PIPE, cwd='tools')
     result = p.communicate(input=in_txt)[1].decode()
     score = int(result.split('Score =')[1].strip())
+    if score == 0:
+        print('\nError: ' + txt + '\n')
 
     return score
 

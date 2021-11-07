@@ -23,6 +23,7 @@ nout:
 
 .PHONY: test-all
 test-all:
+	make co
 	python3 test_all.py
 
 .PHONY: test-one
