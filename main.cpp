@@ -53,6 +53,11 @@ int randint(int a, int b) {
   return dist(engine);
 }
 
+double randdouble(double a, double b) {
+  uniform_real_distribution<> dist(a, b);
+  return dist(engine);
+}
+
 int min_element(const vector<int>& v) {
   int mini = INT_MAX;
   for (auto x : v) {
@@ -83,6 +88,25 @@ int roulette(vector<int>& v) {
   }
 
   throw runtime_error("ルーレット選択のパラメータが 0 のみを含む配列です");
+}
+
+// ランダムにスキルベクトルを生成する
+vector<int> generate_skill(int k) {
+  normal_distribution<> dist(0.0, 1.0);
+
+  vector<double> dds(k);
+  rep(i, k) dds[i] = abs(dist(engine));
+
+  vector<double> pdds(k);
+  rep(i, k) pdds[i] = dds[i] * dds[i];
+
+  double a = randdouble(20, 60);
+  double b = sqrt(accumulate(all(pdds), 0.0));
+  double q = a / b;
+
+  vector<int> s(k);
+  rep(i, k) s[i] = q * dds[i];
+  return s;
 }
 
 class PredictedSkill {
@@ -193,110 +217,29 @@ class Worker {
     };
     update_diffs();
 
-    const int LOOP = 10;
+    vector<int> candidate_skill = vector<int>(skill_size, -1);
+    int min_total_days = 2000;
+    const int LOOP = 500;
     rep(_, LOOP) {
-      int match_count =
-          0;  // 予測完了日数と実際の完了日数の差が 3 以内であるものの数
+      PredictedSkill predicted_skill = PredictedSkill(skill_size);
+      vector<int> generated_skill = generate_skill(skill_size);
+
+      predicted_skill.skill = generated_skill;
+
+      int total_days = 0;
       rep(i, task_size) {
-        const vector<int>& diff = diffs[i];
-        const vector<int>& finished_task_level = finished_task_levels[i];
-        const int p_days = pred_days[i];
-        const int a_days = actual_days[i];
-
-        const int diff_pred_actual = p_days - a_days;
-
-        // 完了日は [-3, 3] のズレがあるので、
-        // 差がこの値以内あれば一致しているとみなす
-        if (abs(diff_pred_actual) <= 3) {
-          match_count++;
-          continue;
-        }
-
-        // 完了日数が想定よりも短かったとき
-        // => 想定スキルが実際よりも低い場合
-        if (diff_pred_actual > 0) {
-          vector<int> for_roulette(skill_size);
-          rep(j, skill_size) {
-            for_roulette[j] = diff[j] < 0 ? abs(diff[j]) : 0;
-          }
-
-          int target_idx;
-          try {
-            target_idx = roulette(for_roulette);
-          } catch (exception e) {
-            show("予測スキルをあげる！");
-            show(pred_days[i]) show(actual_days[i])
-                show(finished_task_levels[i]) show(diffs[i])
-                    show(pskill) throw exception();
-          }
-          pskill[target_idx]++;
-        }
-
-        // 完了日数が想定よりも長かったとき
-        // => 想定スキルが実際よりも高い場合
-        if (diff_pred_actual < 0) {
-          vector<int> for_roulette(skill_size);
-          int mini = min_element(diff);
-          rep(j, skill_size) {
-            // 差分が負になる個別スキルも減少させる対象なので
-            // 下駄を履かせて 0 より大きい値のみを持つ数列する。
-            // また、現在の予測スキルが 0 であったり、レベルが 0 の場合は
-            // これ以上下げられないので対象にならないようにする。
-            for_roulette[j] = (pskill[j] == 0 or finished_task_level[j] == 0)
-                                  ? 0
-                                  : diff[j] + abs(mini) + 1;
-          }
-
-          // 個別スキル >= 個別レベル を満たす個別スキルに関しては、
-          // 値の大小によって確率的に選ぶ意味がないので、数値を揃える。
-          int maxi = max_element(for_roulette);
-          rep(j, skill_size) {
-            if (diff[j] >= 0) for_roulette[j] = maxi;
-          }
-
-          int target_idx;
-          try {
-            target_idx = roulette(for_roulette);
-          } catch (exception e) {
-            show("予測スキルを下げる！");
-            show(pred_days[i]) show(actual_days[i])
-                show(finished_task_levels[i]) show(diffs[i]) show(pskill)
-                    show(for_roulette) show(mini)
-
-            {
-              show(pred_skill.skill);
-              int h = pred_skill.predict_days(finished_task_levels[i]);
-              show(h)
-            }
-
-            throw exception();
-          }
-
-          // タスクレベルよりもスキルが高いとき、-1
-          // してもコストが変わらない場合があるので、
-          // コストを上げる場合はスキルを必ずタスクレベル以下にする。
-          if (pskill[target_idx] >= finished_task_level[target_idx]) {
-            pskill[target_idx] = finished_task_level[target_idx] - 1;
-          } else {
-            pskill[target_idx]--;
-          }
-        }
+        total_days +=
+            abs(predicted_skill.predict_days(finished_task_levels[i]) -
+                actual_days[i]);
       }
-      // pskill
-      // が変更されたので、タスクレベルとの差分と予測完了日数との差分を更新する。
-      update_diffs();
-      update_pred_days();
 
-      // show(_) vector<int> days_diff(task_size);
-      // rep(i, task_size) { days_diff[i] = pred_days[i] - actual_days[i]; }
-      // int sum = 0;
-      // rep(i, task_size) { sum += abs(days_diff[i]); }
-      // show(sum);
-
-      if (match_count == task_size) {
-        break;
+      if (min_total_days > total_days) {
+        min_total_days = total_days;
+        copy(all(predicted_skill.skill), candidate_skill.begin());
       }
     }
+
+    pskill = candidate_skill;
   }
 };
 
@@ -334,15 +277,24 @@ int next_task(const vector<Task>& tasks) {
 
     int size = static_cast<int>(task.successor_tasks.size());
 
-    if (total_level > task.total_level) {
+    if (successor_task_count < size) {
       total_level = task.total_level;
       successor_task_count = size;
       task_idx = i;
-    } else if (total_level == task.total_level and
-               successor_task_count < size) {
+    } else if (total_level > task.total_level and
+               successor_task_count == size) {
       successor_task_count = size;
       task_idx = i;
     }
+    // if (total_level > task.total_level) {
+    //   total_level = task.total_level;
+    //   successor_task_count = size;
+    //   task_idx = i;
+    // } else if (total_level == task.total_level and
+    //            successor_task_count < size) {
+    //   successor_task_count = size;
+    //   task_idx = i;
+    // }
   }
 
   return task_idx;
