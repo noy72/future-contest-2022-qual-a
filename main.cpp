@@ -217,12 +217,40 @@ class Worker {
     };
     update_diffs();
 
-    vector<int> candidate_skill = vector<int>(skill_size, -1);
-    int min_total_days = 2000;
-    const int LOOP = 500;
+    vector<int> candidate_skill = pred_skill.skill;
+    int min_total_days = 0;
+    rep(i, task_size) {
+      min_total_days += abs(pred_skill.predict_days(finished_task_levels[i]) -
+                            actual_days[i]);
+    }
+
+    // 完了日数が 3 以下のタスクについて、
+    // そのタスクレベル以上のスキルは持っているとする。
+    vector<int> lower_limit(skill_size, 0);
+    for (auto p : finished_tasks) {
+      int idx, actual_day;
+      tie(idx, actual_day) = p;
+
+      const vector<int>& finished_task_level = all_tasks[idx].level;
+      if (actual_day <= 3) {
+        rep(i, skill_size) {
+          // [-3, 3]の誤差があるので、1 少なく考える
+          lower_limit[i] = max(lower_limit[i], finished_task_level[i] - 1);
+        }
+      }
+    }
+
+    const int LOOP = 100;
     rep(_, LOOP) {
       PredictedSkill predicted_skill = PredictedSkill(skill_size);
       vector<int> generated_skill = generate_skill(skill_size);
+
+      // 下限よりも小さい場合は下限に合わせる
+      rep(i, skill_size) {
+        if (generated_skill[i] < lower_limit[i]) {
+          generated_skill[i] = lower_limit[i];
+        }
+      }
 
       predicted_skill.skill = generated_skill;
 
@@ -379,7 +407,7 @@ void solve() {
   }
 }
 
-int main() {
+int main(int args, char* argv[]) {
   auto begin = chrono::system_clock::now();
   solve();
   auto end = chrono::system_clock::now();
