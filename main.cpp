@@ -137,6 +137,12 @@ class PredictedSkill {
   }
 };
 
+int predict_days(const vector<int>& level, const vector<int>& skill) {
+  int res = 0;
+  rep(i, level.size()) { res += max(0, level[i] - skill[i]); }
+  return res == 0 ? 1 : res;
+}
+
 class Task {
  public:
   vector<int> level;
@@ -281,6 +287,29 @@ class Worker {
       }
     }
 
+    rep(i, LOOP) {
+      auto copy_candidate_skill = candidate_skill;
+      int idx = randint(0, static_cast<int>(copy_candidate_skill.size()) - 1);
+
+      int cur = copy_candidate_skill[idx];
+      copy_candidate_skill[idx] = randint(max(0, cur - 10), cur + 10);
+
+      int total_days = 0;
+      int nxt_total_days = 0;
+      rep(i, task_size) {
+        total_days +=
+            abs(predict_days(finished_task_levels[i], candidate_skill) -
+                actual_days[i]);
+        nxt_total_days +=
+            abs(predict_days(finished_task_levels[i], copy_candidate_skill) -
+                actual_days[i]);
+      }
+
+      if (total_days > nxt_total_days) {
+        candidate_skill = copy_candidate_skill;
+      }
+    }
+
     pskill = candidate_skill;
   }
 };
@@ -296,7 +325,6 @@ int choice_worker(const vector<Worker>& workers, const vector<int>& level) {
       min_predict_days = min(min_predict_days, p_days);
     }
   }
-
   if (free.size() == 0) return -1;
 
   vector<int> free_worker_idx;
@@ -320,28 +348,8 @@ int next_task(const vector<Task>& tasks) {
     if (task.predecessors_count > 0 or task.finished or task.assigned) continue;
 
     int size = static_cast<int>(task.successor_tasks.size());
-
     task_idx_list.emplace_back(i);
     p.emplace_back(task.total_level / (size + 1));
-
-    // if (successor_task_count < size) {
-    //   total_level = task.total_level;
-    //   successor_task_count = size;
-    //   task_idx = i;
-    // } else if (total_level > task.total_level and
-    //            successor_task_count == size) {
-    //   successor_task_count = size;
-    //   task_idx = i;
-    // }
-    //  if (total_level > task.total_level) {
-    //    total_level = task.total_level;
-    //    successor_task_count = size;
-    //    task_idx = i;
-    //  } else if (total_level == task.total_level and
-    //             successor_task_count < size) {
-    //    successor_task_count = size;
-    //    task_idx = i;
-    //  }
   }
 
   if (p.size() == 0) return -1;
@@ -425,6 +433,22 @@ void solve() {
     }
     day++;
   }
+  /*
+  for (auto worker : workers) {
+    vector<double> res;
+    show("hoge") for (auto p : worker.finished_tasks) {
+      int idx, a_days;
+      tie(idx, a_days) = p;
+
+      auto level = tasks[idx].level;
+      double sum = accumulate(all(level), 0.0);
+      res.emplace_back(a_days / sum);
+    }
+    sort(all(res));
+    transform(all(res), res.begin(), [](double x) { return 1 - x; });
+    transform(all(res), res.begin(), [](double x) { return x * x; });
+    show(res);
+  }*/
 }
 
 int main(int args, char* argv[]) {
