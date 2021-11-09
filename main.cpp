@@ -1,7 +1,9 @@
-#include <assert.h>
+#define NDEBUG
+
 #include <stdio.h>
 
 #include <algorithm>
+#include <cassert>
 #include <chrono>
 #include <climits>
 #include <iostream>
@@ -44,6 +46,20 @@ istream& operator>>(istream& is, vector<T>& v) {
   }
   return is;
 }
+
+template <typename T, int N>
+struct Vector {
+  T data[N];
+  int size;
+};
+
+template <typename T1, typename T2>
+struct Duo {
+  T1 first;
+  T2 second;
+  Duo() {}
+  Duo(T1 a, T2 b) : first(a), second(b) {}
+};
 
 random_device seed_gen;
 default_random_engine engine(seed_gen());
@@ -245,8 +261,7 @@ class Worker {
       }
     }
 
-    const int LOOP = 100;
-    rep(_, LOOP) {
+    rep(_, 100) {
       vector<int> generated_skill = generate_skill(skill_size);
 
       // 下限よりも小さい場合は下限に合わせる
@@ -255,26 +270,6 @@ class Worker {
           generated_skill[i] = lower_limit[i];
         }
       }
-
-      /*
-      rep(i, task_size) {
-        // i 番目に完了したタスクのレベルの総和
-        double total_level = all_tasks[finished_tasks[i].first].total_level;
-        double predicted_days =
-            predict_days(finished_task_levels[i], generated_skill);
-
-        // この値が大きいほど、その i
-        // 番目のタスクのレベルよりもスキルの方が大きい
-        double projected_reduction_rate = (1 - predicted_days / total_level);
-        projected_reduction_rate =
-            projected_reduction_rate * projected_reduction_rate;
-
-        // TODO: projected_reduction_rate が小さい場合は、
-        // スキルが高すぎるかもしれないので、スキルを下げる
-
-        rep(i, skill_size) {}
-      }
-      */
 
       int total_days = 0;
       rep(i, task_size) {
@@ -289,7 +284,64 @@ class Worker {
       }
     }
 
-    rep(i, LOOP) {
+    rep(i, 100) {
+      auto generated_skill = candidate_skill;
+
+      // レベルにスキルを近づけるときは実数で計算したいので型を変える
+      vector<double> d_generated_skill(skill_size);
+      rep(j, skill_size) d_generated_skill[j] = generated_skill[j];
+      rep(i, task_size) {
+        // i 番目に完了したタスクのレベルの総和
+        double total_level = all_tasks[finished_tasks[i].first].total_level;
+        vector<int> tmp(skill_size);  // int じゃないと predict_days に渡せない
+        rep(j, skill_size) tmp[j] = d_generated_skill[j];
+        double predicted_days = predict_days(finished_task_levels[i], tmp);
+
+        // この値が大きいほど、その i
+        // 番目のタスクのレベルよりもスキルの方が大きい
+        double projected_reduction_rate = (1 - predicted_days / total_level);
+        projected_reduction_rate = projected_reduction_rate *
+                                   projected_reduction_rate *
+                                   projected_reduction_rate;
+
+        // TODO: projected_reduction_rate が小さい場合は、
+        // スキルが高すぎるかもしれないので、スキルを下げる
+
+        rep(j, skill_size) {
+          double diff = finished_task_levels[i][j] - d_generated_skill[j];
+          if (diff <= 0)
+            continue;  // レベルよりスキルの方が高いので、近づけようがない
+
+          double amount = randdouble(0, diff) * projected_reduction_rate;
+          d_generated_skill[j] += amount;
+        }
+      }
+
+      vector<int> tmp(skill_size);
+      int total_days_ = 0;
+      rep(i, task_size) {
+        total_days_ +=
+            abs(predict_days(finished_task_levels[i], generated_skill) -
+                actual_days[i]);
+      }
+      rep(j, skill_size) tmp[j] = d_generated_skill[j];
+      int total_days = 0;
+      rep(i, task_size) {
+        total_days +=
+            abs(predict_days(finished_task_levels[i], tmp) - actual_days[i]);
+      }
+
+      if (total_days_ > total_days) {
+        generated_skill = tmp;
+      }
+
+      if (min_total_days > total_days) {
+        min_total_days = total_days;
+        candidate_skill = generated_skill;
+      }
+    }
+
+    rep(i, 100) {
       auto generated_skill = candidate_skill;
       int idx = randint(0, static_cast<int>(generated_skill.size()) - 1);
 
@@ -435,22 +487,6 @@ void solve() {
     }
     day++;
   }
-  /*
-  for (auto worker : workers) {
-    vector<double> res;
-    show("hoge") for (auto p : worker.finished_tasks) {
-      int idx, a_days;
-      tie(idx, a_days) = p;
-
-      auto level = tasks[idx].level;
-      double sum = accumulate(all(level), 0.0);
-      res.emplace_back(a_days / sum);
-    }
-    sort(all(res));
-    transform(all(res), res.begin(), [](double x) { return 1 - x; });
-    transform(all(res), res.begin(), [](double x) { return x * x; });
-    show(res);
-  }*/
 }
 
 int main(int args, char* argv[]) {

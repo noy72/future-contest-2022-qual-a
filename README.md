@@ -14,6 +14,8 @@
       res.emplace_back(a_days / sum);
     }
     sort(all(res));
+    transform(all(res), res.begin(), [](double x) { return 1 - x; });
+    transform(all(res), res.begin(), [](double x) { return x * x; });
     show(res);
   }
 ```
