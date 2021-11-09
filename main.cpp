@@ -9,8 +9,8 @@
 #include <string>
 #include <vector>
 
-#define range(i, a, b) for (int i = (a); i < (b); i++)
-#define rep(i, b) for (int i = 0; i < (b); i++)
+#define range(i, a, b) for (int i = (a); i < (b); ++i)
+#define rep(i, b) for (int i = 0; i < (b); ++i)
 #define ranger(i, a, b) for (int i = (a)-1; i >= (b); i--)
 #define repr(i, b) for (int i = (b)-1; i >= 0; i--)
 #define all(a) (a).begin(), (a).end()
@@ -120,20 +120,8 @@ vector<int> generate_skill(int k) {
   return s;
 }
 
-class PredictedSkill {
- public:
-  vector<int> skill;
-
-  PredictedSkill(int k) : skill(vector<int>(k, 0)) {}
-
-  // 与えたタスクの予測完了日数を返す
-  int predict_days(const vector<int>& level) {
-    int res = 0;
-    rep(i, level.size()) { res += max(0, level[i] - skill[i]); }
-    return res == 0 ? 1 : res;
-  }
-};
-
+// タスクレベルが level, ワーカーのスキルが skill であるとき、
+// タスクを完了するまでにかかる日数を返す。
 int predict_days(const vector<int>& level, const vector<int>& skill) {
   int res = 0;
   rep(i, level.size()) { res += max(0, level[i] - skill[i]); }
@@ -171,13 +159,13 @@ class Task {
 class Worker {
  public:
   vector<int> skill;
-  PredictedSkill pred_skill;
+  vector<int> pred_skill;
   vector<pair<int, int>>
       finished_tasks;  // タスク番号と完了までにかかった日数のペア
   int assigned_task;
   int start_date;
 
-  Worker(int k) : pred_skill(PredictedSkill(k)), assigned_task(-1) {
+  Worker(int k) : pred_skill(vector<int>(k, 0)), assigned_task(-1) {
     skill = vector<int>(k, 0);
   }
 
@@ -209,17 +197,16 @@ class Worker {
       actual_days[i] = actual_day;
     }
 
+    /*
     // 現在の予測スキルを元に、完了済みのタスクの予測完了日数を計算し、
     // pred_days を更新する。
     vector<int> pred_days(task_size);
     auto update_pred_days = [&] {
       rep(i, task_size) {
-        pred_days[i] = pred_skill.predict_days(finished_task_levels[i]);
+        pred_days[i] = predict_days(finished_task_levels[i], pred_skill);
       }
     };
     update_pred_days();
-
-    auto& pskill = pred_skill.skill;
 
     // 現在の予測スキルを元に、タスクレベルとの差を計算し、
     // diffs を更新する。
@@ -228,18 +215,19 @@ class Worker {
     auto update_diffs = [&] {
       rep(i, task_size) {
         vector<int> diff(skill_size);
-        rep(j, skill_size) { diff[j] = pskill[j] - finished_task_levels[i][j]; }
-        diffs[i] = diff;
+        rep(j, skill_size) { diff[j] = pred_skill[j] -
+    finished_task_levels[i][j]; } diffs[i] = diff;
       }
     };
     update_diffs();
+    */
 
-    vector<int> candidate_skill = pred_skill.skill;
     int min_total_days = 0;
     rep(i, task_size) {
-      min_total_days += abs(pred_skill.predict_days(finished_task_levels[i]) -
+      min_total_days += abs(predict_days(finished_task_levels[i], pred_skill) -
                             actual_days[i]);
     }
+    vector<int> candidate_skill = pred_skill;
 
     // 完了日数が 3 以下のタスクについて、
     // そのタスクレベル以上のスキルは持っているとする。
@@ -259,7 +247,6 @@ class Worker {
 
     const int LOOP = 100;
     rep(_, LOOP) {
-      PredictedSkill predicted_skill = PredictedSkill(skill_size);
       vector<int> generated_skill = generate_skill(skill_size);
 
       // 下限よりも小さい場合は下限に合わせる
@@ -269,27 +256,45 @@ class Worker {
         }
       }
 
-      predicted_skill.skill = generated_skill;
+      /*
+      rep(i, task_size) {
+        // i 番目に完了したタスクのレベルの総和
+        double total_level = all_tasks[finished_tasks[i].first].total_level;
+        double predicted_days =
+            predict_days(finished_task_levels[i], generated_skill);
+
+        // この値が大きいほど、その i
+        // 番目のタスクのレベルよりもスキルの方が大きい
+        double projected_reduction_rate = (1 - predicted_days / total_level);
+        projected_reduction_rate =
+            projected_reduction_rate * projected_reduction_rate;
+
+        // TODO: projected_reduction_rate が小さい場合は、
+        // スキルが高すぎるかもしれないので、スキルを下げる
+
+        rep(i, skill_size) {}
+      }
+      */
 
       int total_days = 0;
       rep(i, task_size) {
         total_days +=
-            abs(predicted_skill.predict_days(finished_task_levels[i]) -
+            abs(predict_days(finished_task_levels[i], generated_skill) -
                 actual_days[i]);
       }
 
       if (min_total_days > total_days) {
         min_total_days = total_days;
-        copy(all(predicted_skill.skill), candidate_skill.begin());
+        candidate_skill = generated_skill;
       }
     }
 
     rep(i, LOOP) {
-      auto copy_candidate_skill = candidate_skill;
-      int idx = randint(0, static_cast<int>(copy_candidate_skill.size()) - 1);
+      auto generated_skill = candidate_skill;
+      int idx = randint(0, static_cast<int>(generated_skill.size()) - 1);
 
-      int cur = copy_candidate_skill[idx];
-      copy_candidate_skill[idx] = randint(max(0, cur - 10), cur + 10);
+      int cur = generated_skill[idx];
+      generated_skill[idx] = randint(max(0, cur - 10), cur + 10);
 
       int total_days = 0;
       int nxt_total_days = 0;
@@ -298,16 +303,16 @@ class Worker {
             abs(predict_days(finished_task_levels[i], candidate_skill) -
                 actual_days[i]);
         nxt_total_days +=
-            abs(predict_days(finished_task_levels[i], copy_candidate_skill) -
+            abs(predict_days(finished_task_levels[i], generated_skill) -
                 actual_days[i]);
       }
 
       if (total_days > nxt_total_days) {
-        candidate_skill = copy_candidate_skill;
+        candidate_skill = generated_skill;
       }
     }
 
-    pskill = candidate_skill;
+    pred_skill = candidate_skill;
   }
 };
 
@@ -317,7 +322,7 @@ int choice_worker(const vector<Worker>& workers, const vector<int>& level) {
   rep(i, workers.size()) {
     auto worker = workers[i];
     if (worker.assignable()) {
-      const int p_days = worker.pred_skill.predict_days(level);
+      const int p_days = predict_days(level, worker.pred_skill);
       free.emplace_back(make_pair(i, p_days));
       min_predict_days = min(min_predict_days, p_days);
     }
@@ -418,7 +423,7 @@ void solve() {
 
       // 予測スキルを出力する
       cout << "#s " << finished_worker + 1 << ' ';
-      for (auto v : worker.pred_skill.skill) {
+      for (auto v : worker.pred_skill) {
         cout << v << ' ';
       }
       cout << endl;
