@@ -48,29 +48,26 @@ istream& operator>>(istream& is, vector<T>& v) {
 random_device seed_gen;
 default_random_engine engine(seed_gen());
 
-int randint(int a, int b) {
+inline int randint(int a, int b) {
   uniform_int_distribution<> dist(a, b);
   return dist(engine);
 }
 
-double randdouble(double a, double b) {
+inline double randdouble(double a, double b) {
   uniform_real_distribution<> dist(a, b);
   return dist(engine);
 }
 
+// 拡張 for はなんとなく使わない
 int min_element(const vector<int>& v) {
-  int mini = INT_MAX;
-  for (auto x : v) {
-    mini = min(mini, x);
-  }
+  int mini = INT_MAX, n = v.size();
+  rep(i, n) { mini = min(mini, v[i]); }
   return mini;
 }
 
 int max_element(const vector<int>& v) {
-  int maxi = 0;
-  for (auto x : v) {
-    maxi = max(maxi, x);
-  }
+  int maxi = 0, n = v.size();
+  rep(i, n) { maxi = max(maxi, v[i]); }
   return maxi;
 }
 
