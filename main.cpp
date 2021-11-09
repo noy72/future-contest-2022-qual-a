@@ -59,6 +59,43 @@ struct Duo {
   T2 second;
   Duo() {}
   Duo(T1 a, T2 b) : first(a), second(b) {}
+  bool operator<(const Duo& duo) const {
+    if (first < duo.first) return true;
+    if (first > duo.first) return false;
+    if (second < duo.second) return true;
+    return false;
+  }
+  bool operator>(const Duo& duo) const {
+    if (first > duo.first) return true;
+    if (first < duo.first) return false;
+    if (second > duo.second) return true;
+    return false;
+  }
+};
+
+template <typename T1, typename T2, typename T3>
+struct Trio {
+  T1 first;
+  T2 second;
+  T3 third;
+  Trio() {}
+  Trio(T1 a, T2 b, T3 c) : first(a), second(b), third(c) {}
+  bool operator<(const Trio& trio) const {
+    if (first < trio.first) return true;
+    if (first > trio.first) return false;
+    if (second < trio.second) return true;
+    if (second > trio.second) return false;
+    if (third < trio.third) return true;
+    return false;
+  }
+  bool operator>(const Trio& trio) const {
+    if (first > trio.first) return true;
+    if (first < trio.first) return false;
+    if (second > trio.second) return true;
+    if (second < trio.second) return false;
+    if (third > trio.third) return true;
+    return false;
+  }
 };
 
 random_device seed_gen;
