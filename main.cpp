@@ -144,6 +144,14 @@ int predict_days(const vector<int>& level, const vector<int>& skill) {
   return res == 0 ? 1 : res;
 }
 
+// ワーカーのスキルがどれほどタスクで利用されたかを返す
+int predict_total_used_skill(const vector<int>& level,
+                             const vector<int>& skill) {
+  int res = 0;
+  rep(i, level.size()) { res += max(0, skill[i] - level[i]); }
+  return res;
+}
+
 class Task {
  public:
   vector<int> level;
@@ -369,32 +377,52 @@ class Worker {
 };
 
 int choice_worker(const vector<Worker>& workers, const vector<int>& level) {
-  vector<pair<int, int>> free;  // ワーカーの id, 予測完了日数
+  vector<tuple<int, int, int>>
+      free;  // ワーカーの id, 予測完了日数, 予測スキル活用度
   int min_predict_days = INT_MAX;
+  int max_total_used_skill = 0;
+
+  vector<Trio<int, int, int>> p_days;
+  vector<Trio<int, int, int>> used_skill;
+  int cnt = 0;
   rep(i, workers.size()) {
     auto worker = workers[i];
     if (worker.assignable()) {
-      const int p_days = predict_days(level, worker.pred_skill);
-      free.emplace_back(make_pair(i, p_days));
-      min_predict_days = min(min_predict_days, p_days);
+      p_days.emplace_back(Trio(predict_days(level, worker.pred_skill), cnt, i));
+      used_skill.emplace_back(
+          Trio(predict_total_used_skill(level, worker.pred_skill), cnt, i));
+      ++cnt;
     }
   }
-  if (free.size() == 0) return -1;
+  if (p_days.size() == 0) return -1;
+  if (p_days.size() == 1) return p_days[0].third;
 
-  vector<int> free_worker_idx;
-  for (auto p : free) {
-    if (p.second == min_predict_days) {
-      free_worker_idx.emplace_back(p.first);
-    }
+  sort(all(p_days));
+  sort(all(used_skill), greater<Trio<int, int, int>>());
+
+  vector<int> rank(p_days.size(), 0);
+  rep(i, p_days.size()) {
+    rank[i] = cnt * 2 - p_days[i].second - used_skill[i].second;
+    rank[i] = rank[i] * rank[i];
   }
 
-  assert(free_worker_idx.size() > 0);
+  return p_days[roulette(rank)].third;
 
-  return free_worker_idx.at(randint(0, free_worker_idx.size() - 1));
+  /*
+    vector<int> free_worker_idx;
+    for (auto p : free) {
+      if (p.second == max_total_used_skill) {
+        free_worker_idx.emplace_back(p.first);
+      }
+    }
+
+    assert(free_worker_idx.size() > 0);
+
+    return free_worker_idx.at(randint(0, free_worker_idx.size() - 1));
+    */
 }
 
 int next_task(const vector<Task>& tasks) {
-  int task_idx = -1, successor_task_count = -1, total_level = INT_MAX;
   vector<int> task_idx_list;
   vector<double> p;
   rep(i, tasks.size()) {
