@@ -47,10 +47,38 @@ istream& operator>>(istream& is, vector<T>& v) {
   return is;
 }
 
+constexpr int max_n = 1000;
+constexpr int max_m = 20;
+constexpr int max_k = 20;
+constexpr int max_r = 3000;
+
 template <typename T, int N>
 struct Vector {
   T data[N];
-  int size;
+  int size = 0;
+
+  Vector() {}
+  Vector(T x) {
+    rep(i, N) {
+      data[i] = x;
+      size = N;
+    }
+  }
+
+  inline int operator[](int index) const {
+    assert(index < size);
+    return data[index];
+  }
+
+  inline int& operator[](int index) {
+    assert(index < size);
+    return data[index];
+  }
+
+  inline void push(int x) {
+    assert(size <= N);
+    data[size++] = x;
+  }
 };
 
 template <typename T1, typename T2>
@@ -250,7 +278,6 @@ class Worker {
       actual_days[i] = actual_day;
     }
 
-    /*
     // 現在の予測スキルを元に、完了済みのタスクの予測完了日数を計算し、
     // pred_days を更新する。
     vector<int> pred_days(task_size);
@@ -261,6 +288,7 @@ class Worker {
     };
     update_pred_days();
 
+    /*
     // 現在の予測スキルを元に、タスクレベルとの差を計算し、
     // diffs を更新する。
     // 予測スキル > タスクレベルのとき、差は正になる。　
@@ -274,6 +302,15 @@ class Worker {
     };
     update_diffs();
     */
+
+    // 予測完了日数の変化がないため
+    // 完了済みのタスクレベルよりも大きな変化は起こさない。
+    Vector<int, max_k> limit(0);
+    rep(i, task_size) {
+      rep(j, skill_size) {
+        limit[j] = max(limit[j], finished_task_levels[i][j]);
+      }
+    }
 
     int min_total_days = 0;
     rep(i, task_size) {
@@ -298,13 +335,21 @@ class Worker {
       }
     }
 
-    rep(_, 100) {
+    int LOOP = 100;
+    rep(_, LOOP) {
       vector<int> generated_skill = generate_skill(skill_size);
 
       // 下限よりも小さい場合は下限に合わせる
       rep(i, skill_size) {
         if (generated_skill[i] < lower_limit[i]) {
           generated_skill[i] = lower_limit[i];
+        }
+      }
+
+      // 上限よりも大きい場合は上限に合わせる
+      rep(i, skill_size) {
+        if (generated_skill[i] > limit[i]) {
+          generated_skill[i] = limit[i];
         }
       }
 
@@ -321,7 +366,7 @@ class Worker {
       }
     }
 
-    rep(i, 100) {
+    rep(_, LOOP) {
       auto generated_skill = candidate_skill;
 
       // レベルにスキルを近づけるときは実数で計算したいので型を変える
@@ -378,26 +423,41 @@ class Worker {
       }
     }
 
-    rep(i, 100) {
-      auto generated_skill = candidate_skill;
-      int idx = randint(0, static_cast<int>(generated_skill.size()) - 1);
+    int candidate_skill_days_diff = 0;
+    rep(i, task_size) {
+      candidate_skill_days_diff +=
+          abs(predict_days(finished_task_levels[i], candidate_skill) -
+              actual_days[i]);
+    }
 
-      int cur = generated_skill[idx];
-      generated_skill[idx] = randint(max(0, cur - 10), cur + 10);
+    rep(_, LOOP * 20) {
+      int idx = randint(0, skill_size - 1);
 
-      int total_days = 0;
-      int nxt_total_days = 0;
+      // TODO: cur いらないかも。単に 0 ~ limit[idx] でランダムでいい？
+      int cur = candidate_skill[idx];
+      int changed_mono_skill = randint(0, limit[idx] + 1);
+
+      int changed_skill_day_diff = 0;
+      int candidate_skill_day_diff = 0;
+      Vector<int, max_n> next_pred_days;
       rep(i, task_size) {
-        total_days +=
-            abs(predict_days(finished_task_levels[i], candidate_skill) -
-                actual_days[i]);
-        nxt_total_days +=
-            abs(predict_days(finished_task_levels[i], generated_skill) -
-                actual_days[i]);
+        int mono_level = finished_task_levels[i][idx];
+        int mono_act_days = actual_days[i];
+        int mono_pred_days = pred_days[i];
+
+        int x = max(0, mono_level - candidate_skill[idx]);
+        int y = max(0, mono_level - changed_mono_skill);
+
+        int next_mono_pred_days = mono_pred_days - x + y;
+        next_pred_days.push(next_mono_pred_days);
+        changed_skill_day_diff += abs(mono_act_days - next_mono_pred_days);
+
+        candidate_skill_day_diff += abs(mono_act_days - mono_pred_days);
       }
 
-      if (total_days > nxt_total_days) {
-        candidate_skill = generated_skill;
+      if (candidate_skill_day_diff > changed_skill_day_diff) {
+        candidate_skill[idx] = changed_mono_skill;
+        rep(i, task_size) { pred_days[i] = next_pred_days[i]; }
       }
     }
 
