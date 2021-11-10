@@ -52,6 +52,8 @@ constexpr int max_m = 20;
 constexpr int max_k = 20;
 constexpr int max_r = 3000;
 
+int finished_task_count;
+
 template <typename T, int N>
 struct Vector {
   T data[N];
@@ -65,20 +67,22 @@ struct Vector {
     }
   }
 
-  inline int operator[](int index) const {
+  inline T operator[](int index) const {
     assert(index < size);
     return data[index];
   }
 
-  inline int& operator[](int index) {
+  inline T& operator[](int index) {
     assert(index < size);
     return data[index];
   }
 
-  inline void push(int x) {
+  inline void push(T x) {
     assert(size <= N);
     data[size++] = x;
   }
+
+  inline void reset() { size = 0; }
 };
 
 template <typename T1, typename T2>
@@ -530,41 +534,44 @@ void solve() {
     tasks[u].successor_tasks.emplace_back(v);
   }
 
+  finished_task_count = 0;
+
   int day = 0;
+  Vector<Duo<int, int>, max_m> assign_list;
+  int task_idx, worker_idx, finish;
+  int finished_worker, finished_task_idx;
   while (true) {
-    vector<pair<int, int>> assign_list;
+    assign_list.reset();
     while (true) {
-      int task_idx = next_task(tasks);
+      task_idx = next_task(tasks);
       if (task_idx == -1) break;
 
-      int worker_idx = choice_worker(workers, tasks[task_idx].level);
+      worker_idx = choice_worker(workers, tasks[task_idx].level);
       // cerr << task_idx << ' ' << worker_idx << endl;
       if (worker_idx == -1) break;
 
       workers[worker_idx].assign_task(day, task_idx);
       tasks[task_idx].assign();
-      assign_list.emplace_back(make_pair(worker_idx + 1, task_idx + 1));
+      assign_list.push(Duo(worker_idx + 1, task_idx + 1));
     }
 
-    cout << assign_list.size();
-    for (auto p : assign_list) {
-      cout << ' ' << p.first << ' ' << p.second;
+    cout << assign_list.size;
+    rep(i, assign_list.size) {
+      cout << ' ' << assign_list[i].first << ' ' << assign_list[i].second;
     }
     cout << endl << flush;
 
-    int finish;
     cin >> finish;
     if (finish == -1) {
       break;
     }
 
     rep(i, finish) {
-      int finished_worker;
       cin >> finished_worker;
       finished_worker--;
 
       auto& worker = workers[finished_worker];
-      int finished_task_idx = worker.assigned_task;
+      finished_task_idx = worker.assigned_task;
       auto& task = tasks[finished_task_idx];
 
       worker.finish_task(day);
@@ -572,14 +579,13 @@ void solve() {
 
       // 予測スキルを出力する
       cout << "#s " << finished_worker + 1 << ' ';
-      for (auto v : worker.pred_skill) {
-        cout << v << ' ';
-      }
+      rep(i, k) { cout << worker.pred_skill[i] << ' '; }
       cout << endl;
 
       task.finish();
-      for (auto suc : task.successor_tasks) {
-        tasks[suc].predecessors_count--;
+      finished_task_count++;
+      rep(i, task.successor_tasks.size()) {
+        tasks[task.successor_tasks[i]].predecessors_count--;
       }
     }
     day++;
