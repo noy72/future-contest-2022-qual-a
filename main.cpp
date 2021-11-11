@@ -1,6 +1,6 @@
 #define NDEBUG
 
-#include <stdio.h>
+#include <stdlib.h>
 
 #include <algorithm>
 #include <cassert>
@@ -13,8 +13,8 @@
 
 #define range(i, a, b) for (int i = (a); i < (b); ++i)
 #define rep(i, b) for (int i = 0; i < (b); ++i)
-#define ranger(i, a, b) for (int i = (a)-1; i >= (b); i--)
-#define repr(i, b) for (int i = (b)-1; i >= 0; i--)
+#define ranger(i, a, b) for (int i = (a)-1; i >= (b); --i)
+#define repr(i, b) for (int i = (b)-1; i >= 0; --i)
 #define all(a) (a).begin(), (a).end()
 #define show(x) cerr << #x << " = " << (x) << endl;
 using namespace std;
@@ -83,6 +83,13 @@ struct Vector {
   }
 
   inline void reset() { size = 0; }
+
+  inline void sort() { qsort(data, size, sizeof(T), T::compare_int); }
+
+  inline void output() {
+    rep(i, size) { cerr << data[i] << ' '; }
+    cerr << endl;
+  }
 };
 
 template <typename T1, typename T2>
@@ -91,6 +98,18 @@ struct Duo {
   T2 second;
   Duo() {}
   Duo(T1 a, T2 b) : first(a), second(b) {}
+  static int compare_int(const void* a, const void* b) {
+    if (*(Duo*)a > *(Duo*)b) {
+      return 1;
+    } else if (*(Duo*)a < *(Duo*)b) {
+      return -1;
+    } else {
+      return 0;
+    }
+  }
+  bool operator==(const Duo& duo) const {
+    return first == duo.first and second == duo.second;
+  }
   bool operator<(const Duo& duo) const {
     if (first < duo.first) return true;
     if (first > duo.first) return false;
@@ -213,6 +232,12 @@ int predict_days(const vector<int>& level, const vector<int>& skill) {
   return res == 0 ? 1 : res;
 }
 
+int total_used_skill(const vector<int>& level, const vector<int>& skill) {
+  int res = 0;
+  rep(i, level.size()) { res += max(0, skill[i] - level[i]); }
+  return res == 0 ? 1 : res;
+}
+
 class Task {
  public:
   vector<int> level;
@@ -249,14 +274,32 @@ class Worker {
       finished_tasks;  // タスク番号と完了までにかかった日数のペア
   int assigned_task;
   int start_date;
+  int predicted_finish_day;
+  vector<int> assign_tasks;  // 予約されたタスク
 
   Worker(int k) : pred_skill(vector<int>(k, 0)), assigned_task(-1) {
     skill = vector<int>(k, 0);
   }
 
-  void assign_task(int day, int task) {
+  // 与えられたタスクが完了する日数を返す。
+  // assign_task にあるものも考慮する。
+  int predict_finish_new_task(const vector<int>& level, const int day,
+                              const vector<Task>& tasks) {
+    int remain_day = 0;
+    if (assigned_task != -1) {
+      remain_day += max(0, predicted_finish_day - (day - start_date));
+    }
+    rep(i, assign_tasks.size()) {
+      remain_day += predict_days(tasks[assign_tasks[i]].level, skill);
+    };
+    remain_day += predict_days(level, skill);
+    return remain_day;
+  }
+
+  void assign_task(int day, int task, const vector<int>& level) {
     start_date = day;
     assigned_task = task;
+    predicted_finish_day = predict_days(level, skill);
   }
 
   void finish_task(int day) {
@@ -469,6 +512,66 @@ class Worker {
   }
 };
 
+void assign_tasks(vector<Worker>& workers, vector<Task>& tasks,
+                  const Vector<Duo<int, int>, max_n>& priority, int day,
+                  Vector<int, max_m>& w, Vector<int, max_m>& t) {
+  int free_worker_count = 0;
+  rep(i, workers.size()) {
+    workers[i].assign_tasks = vector<int>();
+    free_worker_count += workers[i].assigned_task == -1 ? 1 : 0;
+  }
+  repr(i, priority.size) {
+    int task_idx = priority[i].second;
+
+    int min_predict_finish_new_task = INT_MAX;
+    int worker_idx;
+    rep(j, workers.size()) {
+      auto worker = workers[j];
+      const int predicted_finish_new_task =
+          worker.predict_finish_new_task(tasks[task_idx].level, day, tasks);
+      if (predicted_finish_new_task < min_predict_finish_new_task) {
+        min_predict_finish_new_task = predicted_finish_new_task;
+        worker_idx = j;
+      }
+    }
+    show(min_predict_finish_new_task);
+    show(worker_idx);
+    if (workers[worker_idx].assign_tasks.size() == 0 and
+        workers[worker_idx].assignable()) {
+      free_worker_count--;
+      w.push(worker_idx);
+      t.push(task_idx);
+      workers[worker_idx].assigned_task = 1;  // -1 ではない適当な値
+      tasks[task_idx].assign();
+    }
+    if (free_worker_count == 0) break;
+    show(task_idx) workers[worker_idx].assign_tasks.emplace_back(task_idx);
+  }
+  rep(i, workers.size()) { cerr << workers[i].assign_tasks.size() << ' '; }
+  cerr << endl;
+
+  // 手が空いている人に最もスキルを使えるタスクを割り当てる。
+  rep(i, workers.size()) {
+    if (workers[i].assigned_task != -1) continue;
+
+    int maxi = 0;
+    int task_idx = -1;
+    rep(j, priority.size) {
+      int k = priority[j].second;
+      if (tasks[k].assigned) continue;
+
+      int s = total_used_skill(tasks[k].level, workers[i].skill);
+      if (maxi < s) {
+        maxi = s;
+        task_idx = k;
+      }
+    }
+    if (task_idx == -1) return;
+    w.push(i);
+    t.push(task_idx);
+  }
+}
+
 int choice_worker(const vector<Worker>& workers, const vector<int>& level) {
   vector<pair<int, int>> free;  // ワーカーの id, 予測完了日数
   int min_predict_days = INT_MAX;
@@ -492,6 +595,26 @@ int choice_worker(const vector<Worker>& workers, const vector<int>& level) {
   assert(free_worker_idx.size() > 0);
 
   return free_worker_idx.at(randint(0, free_worker_idx.size() - 1));
+}
+
+void get_task_priority(const vector<Task>& tasks,
+                       Vector<Duo<int, int>, max_n>& priority) {
+  priority.reset();
+
+  const int C = 10000;
+  rep(i, tasks.size()) {
+    auto task = tasks[i];
+    if (task.predecessors_count > 0 or task.finished or task.assigned) continue;
+
+    int score = C * static_cast<int>(task.successor_tasks.size());
+    score += task.total_level;
+
+    priority.push(Duo(score, i));
+  }
+
+  priority.sort();
+  // rep(i, priority.size) { cerr << priority[i].first << ' '; }
+  // cerr << endl;
 }
 
 int next_task(const vector<Task>& tasks) {
@@ -550,6 +673,8 @@ void solve() {
     tasks[u].successor_tasks.emplace_back(v);
   }
 
+  Vector<Duo<int, int>, max_n> priority;
+
   finished_task_count = 0;
 
   int day = 0;
@@ -558,18 +683,35 @@ void solve() {
   int finished_worker, finished_task_idx;
   while (true) {
     assign_list.reset();
-    while (true) {
-      task_idx = next_task(tasks);
-      if (task_idx == -1) break;
+    get_task_priority(tasks, priority);
 
-      worker_idx = choice_worker(workers, tasks[task_idx].level);
-      // cerr << task_idx << ' ' << worker_idx << endl;
-      if (worker_idx == -1) break;
+    Vector<int, max_m> w, t;
+    assign_tasks(workers, tasks, priority, day, w, t);
 
-      workers[worker_idx].assign_task(day, task_idx);
-      tasks[task_idx].assign();
-      assign_list.push(Duo(worker_idx + 1, task_idx + 1));
+    // w.output();
+    // t.output();
+    rep(i, w.size) {
+      workers[w[i]].assign_task(day, t[i], tasks[t[i]].level);
+      tasks[t[i]].assign();
+      assign_list.push(Duo(w[i] + 1, t[i] + 1));
     }
+
+    // while (true) {
+    //   get_task_priority(tasks, priority);
+    //   if (priority.size == 0) break;
+
+    //  Vector<int, max_m> w, t;
+    //  assign_tasks(workers, tasks, priority, day, w, t);
+    //  // if (task_idx == -1) break;
+
+    //  // worker_idx = choice_worker(workers, tasks[task_idx].level);
+    //  //// cerr << task_idx << ' ' << worker_idx << endl;
+    //  // if (worker_idx == -1) break;
+
+    //  workers[worker_idx].assign_task(day, task_idx, tasks[task_idx].level);
+    //  tasks[task_idx].assign();
+    //  assign_list.push(Duo(worker_idx + 1, task_idx + 1));
+    //}
 
     cout << assign_list.size;
     rep(i, assign_list.size) {
