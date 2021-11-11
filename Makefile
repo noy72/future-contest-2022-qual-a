@@ -28,6 +28,7 @@ test-all:
 
 .PHONY: test-one
 test-one:
+	make co
 	python3 test_one.py $(n)
 
 .PHONY: note

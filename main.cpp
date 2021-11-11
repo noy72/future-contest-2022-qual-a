@@ -339,8 +339,8 @@ class Worker {
       }
     }
 
-    int LOOP = 100;
-    rep(_, LOOP) {
+    int LOOP = 10;
+    rep(_, 100) {
       vector<int> generated_skill = generate_skill(skill_size);
 
       // 下限よりも小さい場合は下限に合わせる
@@ -504,11 +504,27 @@ int next_task(const vector<Task>& tasks) {
 
     int size = static_cast<int>(task.successor_tasks.size());
     task_idx_list.emplace_back(i);
-    p.emplace_back(task.total_level / (size + 1));
+    p.emplace_back(size);
+  }
+  if (p.size() > 0) {
+    return task_idx_list[roulette(p)];
   }
 
-  if (p.size() == 0) return -1;
-  return task_idx_list[roulette(p)];
+  p = vector<double>();
+  rep(i, tasks.size()) {
+    auto task = tasks[i];
+    if (task.predecessors_count > 0 or task.finished or task.assigned or
+        task.successor_tasks.size() > 0)
+      continue;
+
+    task_idx_list.emplace_back(i);
+    p.emplace_back(task.total_level);
+  }
+  if (p.size() > 0) {
+    return task_idx_list[roulette(p)];
+  }
+
+  return -1;
 }
 
 void solve() {

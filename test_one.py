@@ -17,7 +17,7 @@ def get_score(in_txt):
     return score
 
 def iterator(in_txt):
-    for i in range(1000):
+    for i in range(100):
         yield in_txt
 
 if __name__ == '__main__':
@@ -30,7 +30,7 @@ if __name__ == '__main__':
     with Pool(4) as p:
         for s in tqdm(
                 p.imap_unordered(get_score, iterator(in_txt)),
-                total=1000
+                total=100
                 ):
             scores.append(s)
 
