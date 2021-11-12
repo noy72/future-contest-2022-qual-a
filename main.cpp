@@ -84,6 +84,8 @@ struct Vector {
   }
 
   inline void reset() { size = 0; }
+
+  inline void sort() { qsort(data, size, sizeof(T), T::compare_int); }
 };
 
 template <typename T1, typename T2>
@@ -92,6 +94,15 @@ struct Duo {
   T2 second;
   Duo() {}
   Duo(T1 a, T2 b) : first(a), second(b) {}
+  static int compare_int(const void* a, const void* b) {
+    if (*(Duo*)a > *(Duo*)b) {
+      return 1;
+    } else if (*(Duo*)a < *(Duo*)b) {
+      return -1;
+    } else {
+      return 0;
+    }
+  }
   bool operator<(const Duo& duo) const {
     if (first < duo.first) return true;
     if (first > duo.first) return false;
@@ -174,7 +185,7 @@ int roulette(vector<int>& v) {
 }
 int roulette(vector<double>& v) {
   double total = accumulate(all(v), 0.0);
-  double threshold = randdouble(0, total - 1);
+  double threshold = randdouble(0, total);
 
   int sum = 0;
   rep(i, v.size()) {
@@ -241,6 +252,9 @@ class Task {
     total_level = accumulate(all(level), 0);
   }
 };
+
+Vector<int, max_m> predicted_days_finish_task(
+    0);  // 現在実行中のタスクを完了するまでにかかる予測日数。
 
 class Worker {
  public:
@@ -438,21 +452,39 @@ int choice_worker(const vector<Worker>& workers, const vector<int>& level) {
   return free_worker_idx.at(randint(0, free_worker_idx.size() - 1));
 }
 
-int next_task(const vector<Task>& tasks) {
-  int task_idx = -1, successor_task_count = -1, total_level = INT_MAX;
-  vector<int> task_idx_list;
-  vector<double> p;
-  rep(i, tasks.size()) {
-    auto task = tasks[i];
-    if (task.predecessors_count > 0 or task.finished or task.assigned) continue;
+Vector<Duo<double, int>, max_n> weight_priority;
+int next_task(const vector<Task>& tasks, Vector<int, max_n>& priority) {
+  weight_priority.reset();
 
-    int size = static_cast<int>(task.successor_tasks.size());
-    task_idx_list.emplace_back(i);
-    p.emplace_back(task.total_level / (size + 1));
+  int max_p = 0;
+  int idx = -1;
+  rep(i, max_n) {
+    auto task = tasks[i];
+    if (task.predecessors_count > 0 or task.finished or task.assigned or
+        task.successor_tasks.size() > 0)
+      continue;
+    if (max_p < task.successor_tasks.size()) {
+      max_p = task.successor_tasks.size();
+      idx = i;
+    }
   }
 
-  if (p.size() == 0) return -1;
-  return task_idx_list[roulette(p)];
+  if (idx != -1) return idx;
+
+  rep(i, max_n) {
+    auto task = tasks[i];
+    if (task.predecessors_count > 0 or task.finished or task.assigned) continue;
+    return i;
+  }
+
+  return -1;
+
+  weight_priority.sort();
+  rep(i, weight_priority.size) priority[i] = weight_priority[i].second;
+
+  if (weight_priority.size == 0) return -1;
+
+  return priority[0];
 }
 
 void solve() {
@@ -484,10 +516,11 @@ void solve() {
   Vector<Duo<int, int>, max_m> assign_list;
   int task_idx, worker_idx, finish;
   int finished_worker, finished_task_idx;
+  Vector<int, max_n> prioirty(0);
   while (true) {
     assign_list.reset();
     while (true) {
-      task_idx = next_task(tasks);
+      task_idx = next_task(tasks, prioirty);
       if (task_idx == -1) break;
 
       worker_idx = choice_worker(workers, tasks[task_idx].level);
@@ -495,6 +528,8 @@ void solve() {
       if (worker_idx == -1) break;
 
       workers[worker_idx].assign_task(day, task_idx);
+      predicted_days_finish_task[worker_idx] =
+          predict_days(tasks[task_idx].level, workers[worker_idx].skill);
       tasks[task_idx].assign();
       assign_list.push(Duo(worker_idx + 1, task_idx + 1));
     }
