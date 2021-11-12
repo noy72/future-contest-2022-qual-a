@@ -1,4 +1,5 @@
 //#define NDEBUG
+#define LOCAL
 
 #include <stdio.h>
 
@@ -447,27 +448,11 @@ int next_task(const vector<Task>& tasks) {
 
     int size = static_cast<int>(task.successor_tasks.size());
     task_idx_list.emplace_back(i);
-    p.emplace_back(size);
-  }
-  if (p.size() > 0) {
-    return task_idx_list[roulette(p)];
+    p.emplace_back(task.total_level / (size + 1));
   }
 
-  p = vector<double>();
-  rep(i, tasks.size()) {
-    auto task = tasks[i];
-    if (task.predecessors_count > 0 or task.finished or task.assigned or
-        task.successor_tasks.size() > 0)
-      continue;
-
-    task_idx_list.emplace_back(i);
-    p.emplace_back(task.total_level);
-  }
-  if (p.size() > 0) {
-    return task_idx_list[roulette(p)];
-  }
-
-  return -1;
+  if (p.size() == 0) return -1;
+  return task_idx_list[roulette(p)];
 }
 
 void solve() {
@@ -552,11 +537,11 @@ void solve() {
 }
 
 int main(int args, char* argv[]) {
-#ifdef NDEBUG
+#ifdef LOCAL
   auto begin = chrono::system_clock::now();
 #endif
   solve();
-#ifdef NDEBUG
+#ifdef LOCAL
   auto end = chrono::system_clock::now();
   double time = static_cast<double>(
       chrono::duration_cast<chrono::microseconds>(end - begin).count() /
