@@ -1,4 +1,4 @@
-#define NDEBUG
+//#define NDEBUG
 
 #include <stdio.h>
 
@@ -370,63 +370,6 @@ class Worker {
       }
     }
 
-    rep(_, LOOP) {
-      auto generated_skill = candidate_skill;
-
-      // レベルにスキルを近づけるときは実数で計算したいので型を変える
-      vector<double> d_generated_skill(skill_size);
-      rep(j, skill_size) d_generated_skill[j] = generated_skill[j];
-      rep(i, task_size) {
-        // i 番目に完了したタスクのレベルの総和
-        double total_level = all_tasks[finished_tasks[i].first].total_level;
-        vector<int> tmp(skill_size);  // int じゃないと predict_days に渡せない
-        rep(j, skill_size) tmp[j] = d_generated_skill[j];
-        double predicted_days = predict_days(finished_task_levels[i], tmp);
-
-        // この値が大きいほど、その i
-        // 番目のタスクのレベルよりもスキルの方が大きい
-        double projected_reduction_rate = (1 - predicted_days / total_level);
-        projected_reduction_rate = projected_reduction_rate *
-                                   projected_reduction_rate *
-                                   projected_reduction_rate;
-
-        // TODO: projected_reduction_rate が小さい場合は、
-        // スキルが高すぎるかもしれないので、スキルを下げる
-
-        rep(j, skill_size) {
-          double diff = finished_task_levels[i][j] - d_generated_skill[j];
-          if (diff <= 0)
-            continue;  // レベルよりスキルの方が高いので、近づけようがない
-
-          double amount = randdouble(0, diff) * projected_reduction_rate;
-          d_generated_skill[j] += amount;
-        }
-      }
-
-      vector<int> tmp(skill_size);
-      int total_days_ = 0;
-      rep(i, task_size) {
-        total_days_ +=
-            abs(predict_days(finished_task_levels[i], generated_skill) -
-                actual_days[i]);
-      }
-      rep(j, skill_size) tmp[j] = d_generated_skill[j];
-      int total_days = 0;
-      rep(i, task_size) {
-        total_days +=
-            abs(predict_days(finished_task_levels[i], tmp) - actual_days[i]);
-      }
-
-      if (total_days_ > total_days) {
-        generated_skill = tmp;
-      }
-
-      if (min_total_days > total_days) {
-        min_total_days = total_days;
-        candidate_skill = generated_skill;
-      }
-    }
-
     int candidate_skill_days_diff = 0;
     rep(i, task_size) {
       candidate_skill_days_diff +=
@@ -609,11 +552,15 @@ void solve() {
 }
 
 int main(int args, char* argv[]) {
+#ifdef NDEBUG
   auto begin = chrono::system_clock::now();
+#endif
   solve();
+#ifdef NDEBUG
   auto end = chrono::system_clock::now();
   double time = static_cast<double>(
       chrono::duration_cast<chrono::microseconds>(end - begin).count() /
       1000.0);
   show(time / 1000)
+#endif
 }
