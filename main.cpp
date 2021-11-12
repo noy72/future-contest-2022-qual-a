@@ -339,8 +339,8 @@ class Worker {
       }
     }
 
-    int LOOP = 10;
-    rep(_, 100) {
+    int LOOP = 100;
+    rep(_, LOOP) {
       vector<int> generated_skill = generate_skill(skill_size);
 
       // 下限よりも小さい場合は下限に合わせる
@@ -527,6 +527,85 @@ int next_task(const vector<Task>& tasks) {
   return -1;
 }
 
+vector<int> task_weight(const vector<vector<int>>& edge) {
+  vector<Duo<int, int>> w(max_n, Duo(0, 0));
+  rep(i, max_n) w[i].second = i;
+  rep(from, max_n) {
+    if (edge[from].size() == 0) continue;
+    w[from].first++;
+    rep(i, edge[from].size()) {
+      int to = edge[from][i];
+      if (from < to) w[to].first = max(w[from].first, w[to].first);
+    }
+  }
+
+  repr(to, max_n) {
+    rep(i, edge[to].size()) {
+      int from = edge[to][i];
+      if (from < to) w[from].first = max(w[from].first, w[to].first - 1);
+    }
+  }
+
+  rep(i, max_n) {
+    if (w[i].first == 0) w[i].first = 100;
+  }
+
+  sort(all(w));
+  rep(i, max_n) { cerr << w[i].first << ' '; }
+  cerr << endl;
+  vector<int> t(max_n);
+  rep(i, max_n) t[i] = w[i].second;
+
+  return t;
+}
+
+vector<int> new_next_task(const vector<Task>& tasks,
+                          const vector<int>& priority) {
+  vector<int> res;
+  rep(i, priority.size()) {
+    int task_idx = priority[i];
+    if (not tasks[task_idx].assigned and not tasks[task_idx].finished and
+        tasks[task_idx].predecessors_count == 0)
+      res.emplace_back(task_idx);
+  }
+  return res;
+}
+
+vector<Duo<int, int>> new_choice_worker(vector<Worker>& workers,
+                                        vector<Task>& tasks,
+                                        const vector<int>& next_tasks) {
+  vector<Duo<int, int>> res;
+  rep(i, max_m) {
+    if (not workers[i].assignable()) continue;
+    int limit = min(10, static_cast<int>(next_tasks.size()));
+
+    int mini = INT_MAX;
+    int task_idx = -1;
+    int l = limit;
+    int cnt = 0;
+    rep(j, next_tasks.size()) {
+      if (tasks[next_tasks[j]].assigned) continue;
+      cnt++;
+
+      if (not l-- && task_idx != -1) break;
+
+      int pred_days =
+          predict_days(tasks[next_tasks[j]].level, workers[i].skill);
+      if (mini >= pred_days) {
+        mini = pred_days;
+        task_idx = next_tasks[j];
+      }
+    }
+    show(cnt);
+    if (task_idx == -1) continue;
+
+    res.emplace_back(Duo(i, task_idx));
+    tasks[task_idx].assign();
+  }
+
+  return res;
+}
+
 void solve() {
   int n, m, k, r;
   cin >> n >> m >> k >> r;
@@ -540,42 +619,52 @@ void solve() {
     tasks[i].setLevel(level);
   }
 
+  vector<vector<int>> edge(n);
   rep(i, r) {
     int u, v;
     cin >> u >> v;
     u--;
     v--;
 
+    edge[u].emplace_back(v);
+    edge[v].emplace_back(u);
+
     tasks[v].predecessors_count++;
     tasks[u].successor_tasks.emplace_back(v);
   }
 
+  auto priority = task_weight(edge);
+
   finished_task_count = 0;
 
   int day = 0;
-  Vector<Duo<int, int>, max_m> assign_list;
+  // Vector<Duo<int, int>, max_m> assign_list;
   int task_idx, worker_idx, finish;
   int finished_worker, finished_task_idx;
+  int weight_idx = 0;
   while (true) {
-    assign_list.reset();
-    while (true) {
-      task_idx = next_task(tasks);
-      if (task_idx == -1) break;
-
-      worker_idx = choice_worker(workers, tasks[task_idx].level);
+    // assign_list.reset();
+    auto next_tasks = new_next_task(tasks, priority);
+    if (next_tasks.empty()) {
+      cout << 0 << endl;
+    } else {
+      // worker_idx = choice_worker(workers, tasks[task_idx].level);
+      auto assign_list = new_choice_worker(workers, tasks, next_tasks);
       // cerr << task_idx << ' ' << worker_idx << endl;
-      if (worker_idx == -1) break;
 
-      workers[worker_idx].assign_task(day, task_idx);
-      tasks[task_idx].assign();
-      assign_list.push(Duo(worker_idx + 1, task_idx + 1));
-    }
+      // assign_list.push(Duo(worker_idx + 1, task_idx + 1));
+      for (auto d : assign_list) {
+        workers[d.first].assign_task(day, d.second);
+        tasks[d.second].assign();
+      }
 
-    cout << assign_list.size;
-    rep(i, assign_list.size) {
-      cout << ' ' << assign_list[i].first << ' ' << assign_list[i].second;
+      cout << assign_list.size();
+      rep(i, assign_list.size()) {
+        cout << ' ' << assign_list[i].first + 1 << ' '
+             << assign_list[i].second + 1;
+      }
+      cout << endl << flush;
     }
-    cout << endl << flush;
 
     cin >> finish;
     if (finish == -1) {
