@@ -250,7 +250,7 @@ class Worker {
   int assigned_task;
   int start_date;
 
-  Worker(int k) : pred_skill(vector<int>(k, 0)), assigned_task(-1) {
+  Worker(int k) : pred_skill(vector<int>(k, 3)), assigned_task(-1) {
     skill = vector<int>(k, 0);
   }
 
@@ -339,8 +339,8 @@ class Worker {
       }
     }
 
-    int LOOP = 10;
-    rep(_, 100) {
+    int LOOP = 100;
+    rep(_, LOOP) {
       vector<int> generated_skill = generate_skill(skill_size);
 
       // 下限よりも小さい場合は下限に合わせる
@@ -469,6 +469,29 @@ class Worker {
   }
 };
 
+int new_choice_worker(vector<Worker>& workers, const vector<int>& level,
+                      int day) {
+  if (day == 0) {
+    rep(i, workers.size()) {
+      if (workers[i].assignable()) return i;
+    }
+    return -1;
+  }
+
+  vector<Duo<int, int>> v;
+  rep(i, workers.size()) {
+    auto worker = workers[i];
+    const int p_days = predict_days(level, worker.pred_skill);
+    v.emplace_back(Duo(p_days, i));
+  }
+  sort(all(v));
+  rep(i, 15) {
+    if (workers[v[i].second].assignable()) return v[i].second;
+  }
+
+  return -1;
+}
+
 int choice_worker(const vector<Worker>& workers, const vector<int>& level) {
   vector<pair<int, int>> free;  // ワーカーの id, 予測完了日数
   int min_predict_days = INT_MAX;
@@ -494,6 +517,53 @@ int choice_worker(const vector<Worker>& workers, const vector<int>& level) {
   return free_worker_idx.at(randint(0, free_worker_idx.size() - 1));
 }
 
+int new_next_task(const vector<Task>& tasks) {
+  vector<int> suc_tasks_pre_count;
+  int task_idx = -1;
+
+  rep(i, tasks.size()) {
+    auto task = tasks[i];
+    if (task.predecessors_count > 0 or task.finished or task.assigned) continue;
+    auto suc = task.successor_tasks;
+    vector<int> c_suc_pre_count;
+    rep(j, suc.size()) {
+      const auto suc_task = tasks[suc[j]];
+      if (suc_task.finished or suc_task.assigned) continue;
+      c_suc_pre_count.emplace_back(suc_task.predecessors_count);
+    }
+    sort(all(c_suc_pre_count));
+    if (task_idx == -1) {
+      task_idx = i;
+      suc_tasks_pre_count = c_suc_pre_count;
+      continue;
+    }
+
+    int update = 0;
+    int lim = min(suc_tasks_pre_count.size(), c_suc_pre_count.size());
+    rep(i, lim) {
+      if (suc_tasks_pre_count[i] > c_suc_pre_count[i]) {
+        update = 1;
+        break;
+      }
+      if (suc_tasks_pre_count[i] < c_suc_pre_count[i]) {
+        update = -1;
+        break;
+      }
+    }
+
+    if (update == 0 and suc_tasks_pre_count.size() < c_suc_pre_count.size()) {
+      update = 1;
+    }
+
+    if (update == 1) {
+      task_idx = i;
+      suc_tasks_pre_count = c_suc_pre_count;
+      continue;
+    }
+  }
+  return task_idx;
+}
+
 int next_task(const vector<Task>& tasks) {
   int task_idx = -1, successor_task_count = -1, total_level = INT_MAX;
   vector<int> task_idx_list;
@@ -503,12 +573,14 @@ int next_task(const vector<Task>& tasks) {
     if (task.predecessors_count > 0 or task.finished or task.assigned) continue;
 
     int size = static_cast<int>(task.successor_tasks.size());
+    if (size != 0) continue;
     task_idx_list.emplace_back(i);
     p.emplace_back(size);
   }
   if (p.size() > 0) {
     return task_idx_list[roulette(p)];
   }
+  return -1;
 
   p = vector<double>();
   rep(i, tasks.size()) {
@@ -558,6 +630,20 @@ void solve() {
   int finished_worker, finished_task_idx;
   while (true) {
     assign_list.reset();
+    if (day >= 50) {
+      while (true) {
+        task_idx = new_next_task(tasks);
+        if (task_idx == -1) break;
+
+        worker_idx = new_choice_worker(workers, tasks[task_idx].level, day);
+        // cerr << task_idx << ' ' << worker_idx << endl;
+        if (worker_idx == -1) break;
+
+        workers[worker_idx].assign_task(day, task_idx);
+        tasks[task_idx].assign();
+        assign_list.push(Duo(worker_idx + 1, task_idx + 1));
+      }
+    }
     while (true) {
       task_idx = next_task(tasks);
       if (task_idx == -1) break;
