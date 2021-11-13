@@ -355,8 +355,8 @@ class Worker {
       }
     }
 
-    int LOOP = 10;
-    rep(_, 100) {
+    int LOOP = 300;
+    rep(_, LOOP) {
       vector<int> generated_skill = generate_skill(skill_size);
 
       // 下限よりも小さい場合は下限に合わせる
@@ -454,27 +454,74 @@ int choice_worker(const vector<Worker>& workers, const vector<int>& level) {
 }
 
 Vector<Duo<int, int>, max_n> weight_priority;
-void update_priority(const vector<Task>& tasks, Vector<int, max_n>& priority) {
+int update_priority(const vector<Task>& tasks, Vector<int, max_n>& priority,
+                    const int day) {
   weight_priority.reset();
   priority.reset();
-
   Task task;
-  rep(i, max_n) {
-    task = tasks[i];
-    if (task.predecessors_count > 0 or task.finished or task.assigned or
-        task.successor_tasks.size() > 0)
-      continue;
 
-    weight_priority.push(Duo(static_cast<int>(task.successor_tasks.size()), i));
-  }
+  int max_size = 0, min_level = INT_MAX, idx = -1;
+  int max_level = 0;
+  if (day < 500) {
+    rep(i, max_n) {
+      task = tasks[i];
+      if (task.predecessors_count > 0 or task.finished or task.assigned or
+          task.successor_tasks.size() == 0)
+        continue;
 
-  weight_priority.sort();
-  rep(i, weight_priority.size) priority.push(weight_priority[i].second);
+      if (max_size < task.successor_tasks.size()) {
+        max_size = task.successor_tasks.size();
+        min_level = task.total_level;
+        idx = i;
+      } else if (max_size == task.successor_tasks.size() and
+                 min_level > task.total_level) {
+        min_level = task.total_level;
+        idx = i;
+      }
+    }
+    if (idx != -1) return idx;
 
-  rep(i, max_n) {
-    task = tasks[i];
-    if (task.predecessors_count > 0 or task.finished or task.assigned) continue;
-    priority.push(i);
+    min_level = INT_MAX;
+    rep(i, max_n) {
+      task = tasks[i];
+      if (task.predecessors_count > 0 or task.finished or task.assigned)
+        continue;
+      if (min_level > task.total_level) {
+        min_level = task.total_level;
+        idx = i;
+      }
+    }
+    return -1;
+  } else {
+    rep(i, max_n) {
+      task = tasks[i];
+      if (task.predecessors_count > 0 or task.finished or task.assigned or
+          task.successor_tasks.size() > 0)
+        continue;
+
+      if (max_size < task.successor_tasks.size()) {
+        max_size = task.successor_tasks.size();
+        min_level = task.total_level;
+        idx = i;
+      } else if (max_size == task.successor_tasks.size() and
+                 max_level > task.total_level) {
+        max_level = task.total_level;
+        idx = i;
+      }
+    }
+    if (idx != -1) return idx;
+
+    max_level = 0;
+    rep(i, max_n) {
+      task = tasks[i];
+      if (task.predecessors_count > 0 or task.finished or task.assigned)
+        continue;
+      if (max_level < task.total_level) {
+        max_level = task.total_level;
+        idx = i;
+      }
+    }
+    return idx;
   }
 }
 
@@ -492,15 +539,39 @@ void solve() {
     tasks[i].id = i;
   }
 
+  vector<vector<int>> edge(max_n);
   rep(i, r) {
     int u, v;
     cin >> u >> v;
     u--;
     v--;
 
+    edge[u].emplace_back(v);
+    edge[v].emplace_back(u);
+
     tasks[v].predecessors_count++;
     tasks[u].successor_tasks.emplace_back(v);
   }
+
+  vector<int> weight(max_n, 0);
+  repr(from, max_n) {
+    if (weight[from] == 0) weight[from] = tasks[from].total_level;
+    for (int to : edge[from]) {
+      if (from < to) {
+        // weight[to] = max(weight[to], weight[from] + tasks[to].total_level +
+        // 0);
+        weight[to] += tasks[to].total_level + 0;
+      }
+    }
+  }
+  // rep(i, max_n) cerr << weight[i] << ' '; cerr << endl;
+  vector<Duo<int, int>> tmp(max_n);
+  rep(i, max_n) tmp[i] = Duo(weight[i], i);
+
+  sort(all(tmp), greater<Duo<int, int>>());
+  // rep(i, max_n) cerr << tmp[i].first << ' '; cerr << endl;
+  vector<int> p(max_n);
+  rep(i, max_n) p[i] = tmp[i].second;
 
   finished_task_count = 0;
 
@@ -512,9 +583,48 @@ void solve() {
   while (true) {
     assign_list.reset();
     while (true) {
-      update_priority(tasks, priority);
-      if (priority.size == 0) break;
-      task_idx = priority[0];
+      // task_idx = update_priority(tasks, priority, day);
+
+      task_idx = -1;
+      vector<int> a, b;
+      rep(i, max_n) {
+        auto task = tasks[p[i]];
+        if (task.predecessors_count > 0 or task.finished or task.assigned) {
+          continue;
+        }
+        if (task.successor_tasks.size() == 0)
+          b.emplace_back(p[i]);
+        else
+          a.emplace_back(p[i]);
+      }
+
+      if (a.size() > 0) {
+        if (day < 50) {
+          int min_level = INT_MAX;
+          rep(i, a.size()) {
+            if (min_level > tasks[a[i]].total_level) {
+              min_level = tasks[a[i]].total_level;
+              task_idx = a[i];
+            }
+          }
+        } else {
+          task_idx = a[0];
+        }
+      } else if (b.size() > 0) {
+        if (day < 300) {
+          task_idx = b[0];
+        } else {
+          int max_level = 0;
+          rep(i, b.size()) {
+            if (max_level < tasks[b[i]].total_level) {
+              max_level = tasks[b[i]].total_level;
+              task_idx = b[i];
+            }
+          }
+        }
+      }
+
+      if (task_idx == -1) break;
 
       worker_idx = choice_worker(workers, tasks[task_idx].level);
       // cerr << task_idx << ' ' << worker_idx << endl;
