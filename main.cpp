@@ -227,6 +227,7 @@ int predict_days(const vector<int>& level, const vector<int>& skill) {
 
 class Task {
  public:
+  int id;
   vector<int> level;
   int total_level;
   vector<int> successor_tasks;  // このタスクの後継タスク
@@ -452,39 +453,29 @@ int choice_worker(const vector<Worker>& workers, const vector<int>& level) {
   return free_worker_idx.at(randint(0, free_worker_idx.size() - 1));
 }
 
-Vector<Duo<double, int>, max_n> weight_priority;
-int next_task(const vector<Task>& tasks, Vector<int, max_n>& priority) {
+Vector<Duo<int, int>, max_n> weight_priority;
+void update_priority(const vector<Task>& tasks, Vector<int, max_n>& priority) {
   weight_priority.reset();
+  priority.reset();
 
-  int max_p = 0;
-  int idx = -1;
+  Task task;
   rep(i, max_n) {
-    auto task = tasks[i];
+    task = tasks[i];
     if (task.predecessors_count > 0 or task.finished or task.assigned or
         task.successor_tasks.size() > 0)
       continue;
-    if (max_p < task.successor_tasks.size()) {
-      max_p = task.successor_tasks.size();
-      idx = i;
-    }
+
+    weight_priority.push(Duo(static_cast<int>(task.successor_tasks.size()), i));
   }
-
-  if (idx != -1) return idx;
-
-  rep(i, max_n) {
-    auto task = tasks[i];
-    if (task.predecessors_count > 0 or task.finished or task.assigned) continue;
-    return i;
-  }
-
-  return -1;
 
   weight_priority.sort();
-  rep(i, weight_priority.size) priority[i] = weight_priority[i].second;
+  rep(i, weight_priority.size) priority.push(weight_priority[i].second);
 
-  if (weight_priority.size == 0) return -1;
-
-  return priority[0];
+  rep(i, max_n) {
+    task = tasks[i];
+    if (task.predecessors_count > 0 or task.finished or task.assigned) continue;
+    priority.push(i);
+  }
 }
 
 void solve() {
@@ -498,6 +489,7 @@ void solve() {
     vector<int> level(k);
     cin >> level;
     tasks[i].setLevel(level);
+    tasks[i].id = i;
   }
 
   rep(i, r) {
@@ -516,12 +508,13 @@ void solve() {
   Vector<Duo<int, int>, max_m> assign_list;
   int task_idx, worker_idx, finish;
   int finished_worker, finished_task_idx;
-  Vector<int, max_n> prioirty(0);
+  Vector<int, max_n> priority;
   while (true) {
     assign_list.reset();
     while (true) {
-      task_idx = next_task(tasks, prioirty);
-      if (task_idx == -1) break;
+      update_priority(tasks, priority);
+      if (priority.size == 0) break;
+      task_idx = priority[0];
 
       worker_idx = choice_worker(workers, tasks[task_idx].level);
       // cerr << task_idx << ' ' << worker_idx << endl;
